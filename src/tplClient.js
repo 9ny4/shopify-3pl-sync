@@ -1,4 +1,5 @@
 const axios = require('axios');
+const axiosRetry = require('axios-retry');
 const logger = require('./logger');
 
 const TPL_URL = process.env.TPL_API_URL || 'https://3pl-api.example.com/orders';
@@ -6,7 +7,21 @@ const TPL_KEY = process.env.TPL_API_KEY || 'mock-key';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1500;
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+axiosRetry(axios, {
+  retries: MAX_RETRIES,
+  retryDelay: (count) => RETRY_DELAY_MS * count,
+  retryCondition: (error) => {
+    const status = error.response?.status;
+    return axiosRetry.isNetworkOrIdempotentRequestError(error) || status === 429;
+  },
+  onRetry: (count, error, requestConfig) => {
+    logger.warn(`Retrying 3PL push (${count}/${MAX_RETRIES})`, {
+      orderId: requestConfig?.data?.reference || 'unknown',
+      error: error.message,
+    });
+  },
+});
 
 /**
  * Transform internal order format to 3PL warehouse JSON payload.
@@ -43,49 +58,30 @@ function transformTo3PL(order) {
  */
 async function pushOrder(order) {
   const payload = transformTo3PL(order);
-  let lastError;
+  try {
+    const response = await axios.post(TPL_URL, payload, {
+      headers: {
+        'Authorization': `Bearer ${TPL_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      timeout: 15000,
+    });
 
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      const response = await axios.post(TPL_URL, payload, {
-        headers: {
-          'Authorization': `Bearer ${TPL_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        timeout: 15000,
-      });
+    logger.info('Order pushed to 3PL', {
+      orderId: order.id,
+      tplRef: response.data?.reference || 'N/A',
+    });
 
-      logger.info('Order pushed to 3PL', {
-        orderId: order.id,
-        tplRef: response.data?.reference || 'N/A',
-        attempt,
-      });
-
-      return { success: true, orderId: order.id, attempt };
-    } catch (err) {
-      lastError = err;
-      const status = err.response?.status;
-
-      // Don't retry on 4xx client errors (except 429)
-      if (status && status >= 400 && status < 500 && status !== 429) {
-        logger.error('3PL push rejected (non-retryable)', { orderId: order.id, status, error: err.message });
-        throw err;
-      }
-
-      logger.warn(`3PL push attempt ${attempt}/${MAX_RETRIES} failed`, {
-        orderId: order.id,
-        error: err.message,
-        status,
-      });
-
-      if (attempt < MAX_RETRIES) {
-        const delay = RETRY_DELAY_MS * attempt;
-        await sleep(delay);
-      }
+    return { success: true, orderId: order.id };
+  } catch (err) {
+    const status = err.response?.status;
+    if (status && status >= 400 && status < 500 && status !== 429) {
+      logger.error('3PL push rejected (non-retryable)', { orderId: order.id, status, error: err.message });
+      throw err;
     }
-  }
 
-  throw new Error(`Failed to push order ${order.id} after ${MAX_RETRIES} attempts: ${lastError.message}`);
+    throw new Error(`Failed to push order ${order.id} after ${MAX_RETRIES} attempts: ${err.message}`);
+  }
 }
 
 /**
