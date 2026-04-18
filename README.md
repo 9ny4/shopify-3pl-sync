@@ -8,7 +8,7 @@ A Node.js service that polls Shopify (or a compatible order API) for new orders,
 - 📦 Transforms to standardized 3PL JSON format
 - 🔁 Retry logic with exponential backoff on API timeouts
 - 🚨 Slack webhook alerts on failed syncs
-- 📋 Structured JSON logging via Winston
+- 📋 Structured JSON logging via Winston (includes `runId` to correlate syncs)
 - ⏰ Cron scheduler (configurable interval)
 
 ## Prerequisites

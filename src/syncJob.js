@@ -15,13 +15,13 @@ async function runSync() {
   const lookbackMs = (parseInt(process.env.ORDERS_LOOKBACK_MINUTES, 10) || 20) * 60 * 1000;
   const since = lastSyncTime || new Date(Date.now() - lookbackMs);
 
-  logger.info('Starting sync job', { since: since.toISOString() });
+  logger.info('Starting sync job', { since: since.toISOString(), runId: syncStart.getTime() });
 
   let orders = [];
 
   try {
     orders = await fetchOrders(since);
-    logger.info(`Orders fetched: ${orders.length}`, { since: since.toISOString() });
+    logger.info('Orders fetched', { count: orders.length, since: since.toISOString(), runId: syncStart.getTime() });
   } catch (err) {
     logger.error('Fatal: failed to fetch orders', { error: err.message });
     await sendAlert({
@@ -47,6 +47,7 @@ async function runSync() {
     succeeded: results.succeeded.length,
     failed: results.failed.length,
     durationMs: duration,
+    runId: syncStart.getTime(),
   });
 
   if (results.failed.length > 0) {
