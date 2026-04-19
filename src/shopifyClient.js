@@ -8,7 +8,11 @@ const ACCESS_TOKEN = process.env.SHOP_ACCESS_TOKEN;
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 
-axiosRetry(axios, {
+// Use a dedicated instance so retry interceptors don't bleed into other modules
+// that also import axios (e.g. tplClient).
+const httpClient = axios.create();
+
+axiosRetry(httpClient, {
   retries: MAX_RETRIES,
   retryDelay: (retryCount) => RETRY_DELAY_MS * retryCount,
   retryCondition: (error) => {
@@ -33,7 +37,7 @@ async function fetchOrders(since) {
 
   try {
     // FakeStoreAPI: GET /carts — stands in for Shopify orders endpoint
-    const response = await axios.get(`${BASE_URL}/carts`, {
+    const response = await httpClient.get(`${BASE_URL}/carts`, {
       headers: ACCESS_TOKEN ? { 'X-Shopify-Access-Token': ACCESS_TOKEN } : {},
       params: sinceIso ? { startdate: sinceIso } : {},
       timeout: 10000,
