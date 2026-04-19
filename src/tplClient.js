@@ -8,7 +8,11 @@ const TPL_KEY = process.env.TPL_API_KEY || 'mock-key';
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1500;
 
-axiosRetry(axios, {
+// Use a dedicated instance so retry interceptors don't bleed into other modules
+// that also import axios (e.g. shopifyClient).
+const httpClient = axios.create();
+
+axiosRetry(httpClient, {
   retries: MAX_RETRIES,
   retryDelay: (count) => RETRY_DELAY_MS * count,
   retryCondition: (error) => {
@@ -59,7 +63,7 @@ function transformTo3PL(order) {
 async function pushOrder(order) {
   const payload = transformTo3PL(order);
   try {
-    const response = await axios.post(TPL_URL, payload, {
+    const response = await httpClient.post(TPL_URL, payload, {
       headers: {
         'Authorization': `Bearer ${TPL_KEY}`,
         'Content-Type': 'application/json',
