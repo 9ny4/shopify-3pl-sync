@@ -4,17 +4,42 @@ const assert = require('node:assert/strict');
 const { normalizeOrder } = require('../shopifyClient');
 const { transformTo3PL } = require('../tplClient');
 
+function buildRawCart() {
+  return {
+    id: 11,
+    userId: 4,
+    date: '2024-01-15T10:00:00.000Z',
+    products: [
+      { productId: 9, quantity: 1 },
+      { productId: 3, quantity: 2 },
+    ],
+  };
+}
+
+function buildShopifyOrder() {
+  return {
+    id: 5555,
+    created_at: '2024-01-15T10:00:00-05:00',
+    updated_at: '2024-01-15T10:05:00-05:00',
+    financial_status: 'paid',
+    customer: { id: 777 },
+    line_items: [
+      { product_id: 42, sku: 'WIDGET-RED', quantity: 3, price: '29.99' },
+    ],
+    shipping_address: {
+      name: 'Jane Doe',
+      address1: '456 Main St',
+      city: 'Springfield',
+      province: 'IL',
+      zip: '62701',
+      country_code: 'US',
+    },
+  };
+}
+
 describe('normalizeOrder', () => {
   it('normalizes a FakeStoreAPI cart to internal order format', () => {
-    const rawCart = {
-      id: 5,
-      userId: 3,
-      date: '2024-01-15T10:00:00.000Z',
-      products: [
-        { productId: 1, quantity: 2 },
-        { productId: 7, quantity: 1 },
-      ],
-    };
+    const rawCart = buildRawCart();
 
     const order = normalizeOrder(rawCart);
 
@@ -28,24 +53,7 @@ describe('normalizeOrder', () => {
   });
 
   it('normalizes a native Shopify order', () => {
-    const shopifyOrder = {
-      id: 1234567890,
-      created_at: '2024-01-15T10:00:00-05:00',
-      updated_at: '2024-01-15T10:05:00-05:00',
-      financial_status: 'paid',
-      customer: { id: 999 },
-      line_items: [
-        { product_id: 42, sku: 'WIDGET-RED', quantity: 3, price: '29.99' },
-      ],
-      shipping_address: {
-        name: 'Jane Doe',
-        address1: '456 Main St',
-        city: 'Springfield',
-        province: 'IL',
-        zip: '62701',
-        country_code: 'US',
-      },
-    };
+    const shopifyOrder = buildShopifyOrder();
 
     const order = normalizeOrder(shopifyOrder);
 
@@ -86,5 +94,15 @@ describe('transformTo3PL', () => {
     assert.equal(payload.warehouse_order.items[0].sku, 'SKU-1');
     assert.equal(payload.warehouse_order.items[0].qty, 2);
     assert.equal(payload.metadata.source, 'shopify-3pl-sync');
+  });
+
+  it('runs normalize + transform end-to-end', () => {
+    const normalized = normalizeOrder(buildRawCart());
+    const payload = transformTo3PL(normalized);
+
+    assert.equal(payload.reference, normalized.externalId);
+    assert.equal(payload.warehouse_order.items.length, normalized.lineItems.length);
+    assert.equal(payload.warehouse_order.items[0].sku, normalized.lineItems[0].sku);
+    assert.equal(payload.warehouse_order.ship_to.name, 'Customer 4');
   });
 });
