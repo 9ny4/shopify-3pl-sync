@@ -1,4 +1,5 @@
 const axios = require('axios');
+const axiosRetry = require('axios-retry');
 const logger = require('./logger');
 
 const BASE_URL = process.env.SHOP_API_URL || 'https://fakestoreapi.com';
@@ -7,10 +8,17 @@ const ACCESS_TOKEN = process.env.SHOP_ACCESS_TOKEN;
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 
-/**
- * Sleep helper for retry backoff.
- */
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+axiosRetry(axios, {
+  retries: MAX_RETRIES,
+  retryDelay: (retryCount) => RETRY_DELAY_MS * retryCount,
+  retryCondition: (error) => {
+    const status = error.response?.status;
+    return axiosRetry.isNetworkOrIdempotentRequestError(error) || status === 429;
+  },
+  onRetry: (count, error) => {
+    logger.warn(`Retrying order fetch (${count}/${MAX_RETRIES})`, { error: error.message });
+  },
+});
 
 /**
  * Fetch orders from Shopify (or FakeStoreAPI as stand-in).
@@ -23,35 +31,20 @@ async function fetchOrders(since) {
   const sinceIso = since ? since.toISOString() : null;
   logger.info('Fetching orders from source API', { since: sinceIso, url: BASE_URL });
 
-  let lastError;
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      // FakeStoreAPI: GET /carts — stands in for Shopify orders endpoint
-      const response = await axios.get(`${BASE_URL}/carts`, {
-        headers: ACCESS_TOKEN ? { 'X-Shopify-Access-Token': ACCESS_TOKEN } : {},
-        params: sinceIso ? { startdate: sinceIso } : {},
-        timeout: 10000,
-      });
+  try {
+    // FakeStoreAPI: GET /carts — stands in for Shopify orders endpoint
+    const response = await axios.get(`${BASE_URL}/carts`, {
+      headers: ACCESS_TOKEN ? { 'X-Shopify-Access-Token': ACCESS_TOKEN } : {},
+      params: sinceIso ? { startdate: sinceIso } : {},
+      timeout: 10000,
+    });
 
-      const rawOrders = Array.isArray(response.data) ? response.data : [response.data];
-      logger.info(`Fetched ${rawOrders.length} orders`, { attempt });
-      return rawOrders.map(normalizeOrder);
-    } catch (err) {
-      lastError = err;
-      logger.warn(`Order fetch attempt ${attempt}/${MAX_RETRIES} failed`, {
-        error: err.message,
-        status: err.response?.status,
-      });
-
-      if (attempt < MAX_RETRIES) {
-        const delay = RETRY_DELAY_MS * attempt;
-        logger.info(`Retrying in ${delay}ms...`);
-        await sleep(delay);
-      }
-    }
+    const rawOrders = Array.isArray(response.data) ? response.data : [response.data];
+    logger.info(`Fetched ${rawOrders.length} orders`);
+    return rawOrders.map(normalizeOrder);
+  } catch (err) {
+    throw new Error(`Failed to fetch orders after ${MAX_RETRIES} attempts: ${err.message}`);
   }
-
-  throw new Error(`Failed to fetch orders after ${MAX_RETRIES} attempts: ${lastError.message}`);
 }
 
 /**

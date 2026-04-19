@@ -8,11 +8,18 @@
     "dev": "nodemon src/index.js",
     "test": "node --test src/__tests__/sync.test.js"
   },
-  "keywords": ["shopify", "3pl", "logistics", "sync", "ecommerce"],
+  "keywords": [
+    "shopify",
+    "3pl",
+    "logistics",
+    "sync",
+    "ecommerce"
+  ],
   "author": "9ny4",
   "license": "MIT",
   "dependencies": {
     "axios": "^1.6.7",
+    "axios-retry": "^3.9.1",
     "cron": "^3.1.6",
     "dotenv": "^16.4.5",
     "winston": "^3.11.0"
