@@ -43,12 +43,15 @@ describe('normalizeOrder', () => {
 
     const order = normalizeOrder(rawCart);
 
-    assert.equal(order.id, '5');
-    assert.equal(order.externalId, 'fakestore-5');
-    assert.equal(order.customerId, '3');
+    // buildRawCart returns id:11, userId:4, products:[{productId:9,qty:1},{productId:3,qty:2}]
+    assert.equal(order.id, '11');
+    assert.equal(order.externalId, 'fakestore-11');
+    assert.equal(order.customerId, '4');
     assert.equal(order.lineItems.length, 2);
-    assert.equal(order.lineItems[0].sku, 'SKU-1');
-    assert.equal(order.lineItems[0].quantity, 2);
+    assert.equal(order.lineItems[0].sku, 'SKU-9');
+    assert.equal(order.lineItems[0].quantity, 1);
+    assert.equal(order.lineItems[1].sku, 'SKU-3');
+    assert.equal(order.lineItems[1].quantity, 2);
     assert.equal(order.status, 'pending');
   });
 
@@ -57,12 +60,17 @@ describe('normalizeOrder', () => {
 
     const order = normalizeOrder(shopifyOrder);
 
-    assert.equal(order.id, '1234567890');
-    assert.equal(order.externalId, 'shopify-1234567890');
+    // buildShopifyOrder returns id:5555, financial_status:'paid'
+    assert.equal(order.id, '5555');
+    assert.equal(order.externalId, 'shopify-5555');
+    assert.equal(order.customerId, '777');
     assert.equal(order.status, 'paid');
+    assert.equal(order.lineItems.length, 1);
     assert.equal(order.lineItems[0].sku, 'WIDGET-RED');
+    assert.equal(order.lineItems[0].quantity, 3);
     assert.equal(order.lineItems[0].unitPrice, 29.99);
     assert.equal(order.shippingAddress.city, 'Springfield');
+    assert.equal(order.shippingAddress.country, 'US');
   });
 });
 
