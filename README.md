@@ -1,6 +1,11 @@
 # shopify-3pl-sync
 
-A Node.js service that polls Shopify (or a compatible order API) for new orders, transforms them into 3PL warehouse format, and pushes them to your fulfillment provider. Includes Slack alerting on failures and a configurable cron scheduler.
+A Node.js service that keeps Shopify orders flowing to a third-party logistics provider for fulfillment.
+In simple terms: it polls Shopify for new orders, then pushes those orders to your 3PL so the warehouse can pick, pack, and ship them.
+
+## Demo
+
+Screenshot coming soon
 
 ## Features
 
